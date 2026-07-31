@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lead Disconnect Scrubber</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background: #1e293b;
+            padding: 40px;
+            border-radius: 16px;
+            width: 420px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 26px;
+        }
+        p {
+            color: #94a3b8;
+            margin-bottom: 30px;
+        }
+        input[type="file"] {
+            margin: 20px 0;
+            color: white;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 14px 40px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .flash {
+            background: #7f1d1d;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Lead Disconnect Scrubber</h1>
+        <p>Upload your lead list. Disconnects and undeliverable numbers will be removed automatically.</p>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="flash">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".csv" required>
+            <br><br>
+            <button type="submit">Start Cleaning</button>
+        </form>
+    </div>
+</body>
+</html>
