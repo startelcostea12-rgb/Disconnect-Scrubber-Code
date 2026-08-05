@@ -11,7 +11,8 @@ app = Flask(__name__)
 app.secret_key = "change-this-to-anything-random"
 
 # ====================== PUT YOUR API KEY HERE ======================
-API_KEY = "ctp_live_kmENri6SA29x9fTpPODbiuK1eqZeD8W0"
+API_KEY = "ctp_live_kmENri6SA29x9fTpPODbiuK1eqZeD8W0
+
 # ===================================================================
 
 def clean_phone(phone):
@@ -112,7 +113,7 @@ def index():
                 total=total,
                 kept=len(cleaned),
                 removed=removed,
-                download_path=temp.name
+                download_name=os.path.basename(temp.name)
             )
 
         except Exception as e:
@@ -121,8 +122,16 @@ def index():
 
     return render_template("index.html")
 
-@app.route("/download/<path:filepath>")
-def download(filepath):
+@app.route("/download/<filename>")
+def download(filename):
+    # Only allow a bare filename -- blocks path traversal (../../etc/passwd etc.)
+    filename = os.path.basename(filename)
+    filepath = os.path.join(tempfile.gettempdir(), filename)
+
+    if not os.path.exists(filepath):
+        flash("That file has expired -- please upload and process again.")
+        return redirect(url_for("index"))
+
     return send_file(filepath, as_attachment=True, download_name="cleaned_leads.csv")
 
 if __name__ == "__main__":
