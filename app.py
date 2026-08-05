@@ -11,7 +11,7 @@ app = Flask(__name__)
 app.secret_key = "change-this-to-anything-random"
 
 # ====================== PUT YOUR API KEY HERE ======================
-API_KEY = "ctp_live_kmENri6SA29x9fTpPODbiuK1eqZeD8W0
+API_KEY = "ctp_live_kmENri6SA29x9fTpPODbiuK1eqZeD8W0"
 
 # ===================================================================
 
