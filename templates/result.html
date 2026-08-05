@@ -51,7 +51,7 @@
         <div class="stat good">Good numbers kept: <strong>{{ kept }}</strong></div>
         <div class="stat bad">Disconnected removed: <strong>{{ removed }}</strong></div>
 
-        <a class="button" href="{{ url_for('download', filepath=download_path) }}">Download Cleaned CSV</a>
+        <a class="button" href="{{ url_for('download', filename=download_name) }}">Download Cleaned CSV</a>
         <br><br>
         <a href="/" style="color:#94a3b8;">Clean another list</a>
     </div>
