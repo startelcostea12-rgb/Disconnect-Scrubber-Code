@@ -12,17 +12,17 @@ app.secret_key = "change-this-to-anything-random"
 
 # ====================== PUT YOUR API KEY HERE ======================
 API_KEY = "ctp_live_kmENri6SA29x9fTpPODbiuK1eqZeD8W0"
-
 # ===================================================================
 
 def clean_phone(phone):
     if pd.isna(phone):
         return None
     phone = re.sub(r"[^\d]", "", str(phone))
+    # Extract the standard 10-digit subscriber portion so the API maps properly.
     if len(phone) == 11 and phone.startswith("1"):
-        return phone
+        return phone[1:]
     if len(phone) == 10:
-        return "1" + phone
+        return phone
     return None
 
 def lookup_number(phone):
@@ -31,16 +31,20 @@ def lookup_number(phone):
         "Content-Type": "application/json"
     }
     try:
+        # Corrected endpoint and layout parameters based on CheckThatPhone API payload format
         r = requests.post(
-            "https://api.checkthatphone.com/v1/lookup",
+            "https://checkthatphone.com/v1/lookup",
             headers=headers,
-            json={"phone": phone},
+            json={
+                "number": phone,
+                "litigatorFilter": True
+            },
             timeout=30
         )
         if r.status_code == 200:
             return r.json()
         return {"success": False}
-    except:
+    except Exception as e:
         return {"success": False}
 
 @app.route("/", methods=["GET", "POST"])
@@ -49,39 +53,37 @@ def index():
         if "file" not in request.files:
             flash("No file selected")
             return redirect(url_for("index"))
-
         file = request.files["file"]
         if file.filename == "":
             flash("No file selected")
             return redirect(url_for("index"))
-
         if not file.filename.lower().endswith(".csv"):
             flash("Please upload a CSV file")
             return redirect(url_for("index"))
-
+            
         try:
             df = pd.read_csv(file, dtype=str)
-
             if "phone" not in df.columns:
                 flash("CSV must have a column named 'phone'")
                 return redirect(url_for("index"))
-
+                
             df["clean_phone"] = df["phone"].apply(clean_phone)
             df = df[df["clean_phone"].notna()].copy()
             total = len(df)
-
+            
             if total == 0:
                 flash("No valid phone numbers found")
                 return redirect(url_for("index"))
-
+                
             results = {}
             with ThreadPoolExecutor(max_workers=5) as executor:
-                futures = {executor.submit(lookup_number, p): p for p in df["clean_phone"]}
+                # Running lookup against unique numbers protects your credits from list duplication
+                futures = {executor.submit(lookup_number, p): p for p in df["clean_phone"].unique()}
                 for future in as_completed(futures):
                     phone = futures[future]
                     results[phone] = future.result()
-                    time.sleep(0.1)
-
+                    time.sleep(0.05)
+                    
             df["deliverable"] = df["clean_phone"].map(
                 lambda x: results.get(x, {}).get("data", {}).get("deliverable", "false")
             )
@@ -97,17 +99,17 @@ def index():
             df["reason"] = df["clean_phone"].map(
                 lambda x: results.get(x, {}).get("data", {}).get("reason", "")
             )
-
-            cleaned = df[df["deliverable"] == "true"].copy()
+            
+            # Keep rows that are explicitly deliverable and do not have an unsubscribe recommendation
+            cleaned = df[(df["deliverable"] == "true") & (df["action"] != "unsubscribe")].copy()
             cleaned = cleaned.drop(columns=["clean_phone"])
-
+            
             # Save to temp file for download
             temp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
             cleaned.to_csv(temp.name, index=False)
             temp.close()
-
+            
             removed = total - len(cleaned)
-
             return render_template(
                 "result.html",
                 total=total,
@@ -115,25 +117,20 @@ def index():
                 removed=removed,
                 download_name=os.path.basename(temp.name)
             )
-
         except Exception as e:
             flash(f"Error: {str(e)}")
             return redirect(url_for("index"))
-
+            
     return render_template("index.html")
 
 @app.route("/download/<filename>")
 def download(filename):
-    # Only allow a bare filename -- blocks path traversal (../../etc/passwd etc.)
     filename = os.path.basename(filename)
     filepath = os.path.join(tempfile.gettempdir(), filename)
-
     if not os.path.exists(filepath):
         flash("That file has expired -- please upload and process again.")
         return redirect(url_for("index"))
-
     return send_file(filepath, as_attachment=True, download_name="cleaned_leads.csv")
 
 if __name__ == "__main__":
-    # This makes it accessible on your network
     app.run(host="0.0.0.0", port=5000, debug=False)
