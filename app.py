@@ -18,7 +18,6 @@ def clean_phone(phone):
     if pd.isna(phone):
         return None
     phone = re.sub(r"[^\d]", "", str(phone))
-    # Extract the standard 10-digit subscriber portion so the API maps properly.
     if len(phone) == 11 and phone.startswith("1"):
         return phone[1:]
     if len(phone) == 10:
@@ -31,27 +30,23 @@ def lookup_number(phone):
         "Content-Type": "application/json"
     }
     try:
-        # Pass litigatorFilter in the URL query string as required by the API specification
-        url = "https://checkthatphone.com"
+        # API requires both keys to bypass parameter ambiguity safely
+        url = "https://api.checkthatphone.com/v1/lookup"
+        payload = {
+            "phone": phone,
+            "number": phone,
+            "litigatorFilter": True
+        }
         
-        r = requests.post(
-            url,
-            headers=headers,
-            json={"number": phone},
-            timeout=30
-        )
+        r = requests.post(url, headers=headers, json=payload, timeout=30)
         
         if r.status_code == 200:
-            res_json = r.json()
-            # If the API backend itself returned a success: false token, log it
-            if not res_json.get("success"):
-                print(f"API returned success=False for {phone}: {res_json}")
-            return res_json
+            return r.json()
             
-        print(f"HTTP Error {r.status_code} for {phone}: {r.text}")
+        print(f"HTTP Error {r.status_code}: {r.text}")
         return {"success": False}
     except Exception as e:
-        print(f"Connection Exception for {phone}: {str(e)}")
+        print(f"Exception: {str(e)}")
         return {"success": False}
 
 @app.route("/", methods=["GET", "POST"])
@@ -84,44 +79,45 @@ def index():
                 
             results = {}
             with ThreadPoolExecutor(max_workers=5) as executor:
-                # Running lookup against unique numbers protects your credits from list duplication
                 futures = {executor.submit(lookup_number, p): p for p in df["clean_phone"].unique()}
                 for future in as_completed(futures):
                     phone = futures[future]
                     results[phone] = future.result()
                     time.sleep(0.05)
                     
+            # Explicit parsing checks for strings and boolean defaults
             df["deliverable"] = df["clean_phone"].map(
                 lambda x: str(results.get(x, {}).get("data", {}).get("deliverable", "false")).lower()
             )
             df["action"] = df["clean_phone"].map(
-                lambda x: results.get(x, {}).get("data", {}).get("action", "")
+                lambda x: str(results.get(x, {}).get("data", {}).get("action", "")).lower()
             )
             df["carrier"] = df["clean_phone"].map(
-                lambda x: results.get(x, {}).get("data", {}).get("dipCarrier", "")
+                lambda x: results.get(x, {}).get("data", {}).get("dipCarrier", "Unknown")
             )
             df["line_type"] = df["clean_phone"].map(
-                lambda x: results.get(x, {}).get("data", {}).get("dipCarrierType", "")
+                lambda x: results.get(x, {}).get("data", {}).get("dipCarrierType", "Unknown")
             )
             df["reason"] = df["clean_phone"].map(
-                lambda x: results.get(x, {}).get("data", {}).get("reason", "")
+                lambda x: results.get(x, {}).get("data", {}).get("reason", "API Lookup Failure")
             )
             
-            # Filter logic: Keep rows that are explicitly deliverable and do not have an unsubscribe recommendation
-            cleaned = df[(df["deliverable"] == "true") & (df["action"] != "unsubscribe")].copy()
+            # Change the hard filter so you can actually visually inspect the results inside the file
+            # If you want to strictly remove them later, uncomment the line below:
+            # df = df[(df["deliverable"] == "true") & (df["action"] != "unsubscribe")]
+            
+            cleaned = df.copy()
             cleaned = cleaned.drop(columns=["clean_phone"])
             
-            # Save to temp file for download
             temp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
             cleaned.to_csv(temp.name, index=False)
             temp.close()
             
-            removed = total - len(cleaned)
             return render_template(
                 "result.html",
                 total=total,
                 kept=len(cleaned),
-                removed=removed,
+                removed=0,
                 download_name=os.path.basename(temp.name)
             )
         except Exception as e:
