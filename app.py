@@ -14,6 +14,8 @@ app.secret_key = "change-this-to-anything-random"
 # Set this in Render under your service -> Environment -> Environment Variables
 # Key name: CHECKTHATPHONE_API_KEY
 API_KEY = os.environ.get("CHECKTHATPHONE_API_KEY")
+if not API_KEY:
+    print("WARNING - CHECKTHATPHONE_API_KEY is not set! All lookups will fail with 401.")
 # =======================================================
 
 def clean_phone(phone):
@@ -40,9 +42,11 @@ def lookup_number(phone):
         )
         if r.status_code == 200:
             return r.json()
-        return {"success": False}
-    except:
-        return {"success": False}
+        print(f"DEBUG - API returned {r.status_code} for {phone}: {r.text}")
+        return {"success": False, "error_detail": f"HTTP {r.status_code}: {r.text[:200]}"}
+    except Exception as e:
+        print(f"DEBUG - Exception calling API for {phone}: {e}")
+        return {"success": False, "error_detail": f"Request failed: {e}"}
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -106,6 +110,7 @@ def index():
             )
             df["reason"] = df["clean_phone"].map(
                 lambda x: results.get(x, {}).get("data", {}).get("reason", "")
+                or results.get(x, {}).get("error_detail", "")
             )
 
             cleaned = df[df["deliverable"] == "true"].copy()
