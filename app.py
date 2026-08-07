@@ -12,7 +12,7 @@ app = Flask(__name__)
 app.secret_key = "change-this-to-anything-random"
 
 # ====================== API KEY ======================
-API_KEY = "ctp_live_kmENri6SA29x9fTpPODbiuK1eqZeD8W0"
+API_KEY = "YOUR_NEW_KEY_HERE"
 # =======================================================
 
 def clean_phone(phone):
