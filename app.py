@@ -31,20 +31,27 @@ def lookup_number(phone):
         "Content-Type": "application/json"
     }
     try:
-        # Corrected endpoint and layout parameters based on CheckThatPhone API payload format
+        # Pass litigatorFilter in the URL query string as required by the API specification
+        url = "https://checkthatphone.com"
+        
         r = requests.post(
-            "https://checkthatphone.com/v1/lookup",
+            url,
             headers=headers,
-            json={
-                "number": phone,
-                "litigatorFilter": True
-            },
+            json={"number": phone},
             timeout=30
         )
+        
         if r.status_code == 200:
-            return r.json()
+            res_json = r.json()
+            # If the API backend itself returned a success: false token, log it
+            if not res_json.get("success"):
+                print(f"API returned success=False for {phone}: {res_json}")
+            return res_json
+            
+        print(f"HTTP Error {r.status_code} for {phone}: {r.text}")
         return {"success": False}
     except Exception as e:
+        print(f"Connection Exception for {phone}: {str(e)}")
         return {"success": False}
 
 @app.route("/", methods=["GET", "POST"])
@@ -85,7 +92,7 @@ def index():
                     time.sleep(0.05)
                     
             df["deliverable"] = df["clean_phone"].map(
-                lambda x: results.get(x, {}).get("data", {}).get("deliverable", "false")
+                lambda x: str(results.get(x, {}).get("data", {}).get("deliverable", "false")).lower()
             )
             df["action"] = df["clean_phone"].map(
                 lambda x: results.get(x, {}).get("data", {}).get("action", "")
@@ -100,7 +107,7 @@ def index():
                 lambda x: results.get(x, {}).get("data", {}).get("reason", "")
             )
             
-            # Keep rows that are explicitly deliverable and do not have an unsubscribe recommendation
+            # Filter logic: Keep rows that are explicitly deliverable and do not have an unsubscribe recommendation
             cleaned = df[(df["deliverable"] == "true") & (df["action"] != "unsubscribe")].copy()
             cleaned = cleaned.drop(columns=["clean_phone"])
             
