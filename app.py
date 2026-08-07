@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import re
 import os
+import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
@@ -30,23 +31,29 @@ def lookup_number(phone):
         "Content-Type": "application/json"
     }
     try:
-        # API requires both keys to bypass parameter ambiguity safely
-        url = "https://api.checkthatphone.com/v1/lookup"
+        url = "https://checkthatphone.com"
+        # The API specifically requires "subscriber" or "phone" 
         payload = {
             "phone": phone,
-            "number": phone,
+            "subscriber": phone,
             "litigatorFilter": True
         }
         
         r = requests.post(url, headers=headers, json=payload, timeout=30)
         
         if r.status_code == 200:
-            return r.json()
+            res_json = r.json()
+            # Force Render console to flush this print statement immediately
+            print(f"RENDER LOG - SUCCESS FOR {phone}: {res_json}")
+            sys.stdout.flush()
+            return res_json
             
-        print(f"HTTP Error {r.status_code}: {r.text}")
+        print(f"RENDER LOG - HTTP ERROR {r.status_code} for {phone}: {r.text}")
+        sys.stdout.flush()
         return {"success": False}
     except Exception as e:
-        print(f"Exception: {str(e)}")
+        print(f"RENDER LOG - EXCEPTION for {phone}: {str(e)}")
+        sys.stdout.flush()
         return {"success": False}
 
 @app.route("/", methods=["GET", "POST"])
@@ -84,13 +91,13 @@ def index():
                     phone = futures[future]
                     results[phone] = future.result()
                     time.sleep(0.05)
-                    
-            # Explicit parsing checks for strings and boolean defaults
+            
+            # Directly target the response schema layout
             df["deliverable"] = df["clean_phone"].map(
                 lambda x: str(results.get(x, {}).get("data", {}).get("deliverable", "false")).lower()
             )
             df["action"] = df["clean_phone"].map(
-                lambda x: str(results.get(x, {}).get("data", {}).get("action", "")).lower()
+                lambda x: str(results.get(x, {}).get("data", {}).get("action", "none")).lower()
             )
             df["carrier"] = df["clean_phone"].map(
                 lambda x: results.get(x, {}).get("data", {}).get("dipCarrier", "Unknown")
@@ -99,13 +106,10 @@ def index():
                 lambda x: results.get(x, {}).get("data", {}).get("dipCarrierType", "Unknown")
             )
             df["reason"] = df["clean_phone"].map(
-                lambda x: results.get(x, {}).get("data", {}).get("reason", "API Lookup Failure")
+                lambda x: results.get(x, {}).get("data", {}).get("reason", "Clean Line / No Flag")
             )
             
-            # Change the hard filter so you can actually visually inspect the results inside the file
-            # If you want to strictly remove them later, uncomment the line below:
-            # df = df[(df["deliverable"] == "true") & (df["action"] != "unsubscribe")]
-            
+            # Keeping all rows in output for easy visual debugging on your download
             cleaned = df.copy()
             cleaned = cleaned.drop(columns=["clean_phone"])
             
@@ -137,3 +141,4 @@ def download(filename):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
+
