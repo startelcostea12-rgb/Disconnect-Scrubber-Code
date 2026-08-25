@@ -17,8 +17,6 @@ app.secret_key = "change-this-to-anything-random"
 API_KEY = "ctp_live_szbun8EEXauNTe6AIJPVZ3JagVRAXe1V"
 # =======================================================
 
-# In-memory job tracker. Fine for a single-instance app (WEB_CONCURRENCY=1).
-# If you ever scale to multiple instances, this needs to move to a shared store (e.g. Redis).
 JOBS = {}
 JOBS_LOCK = threading.Lock()
 
@@ -41,7 +39,7 @@ def lookup_number(phone):
         url = "https://api.checkthatphone.com/v1/lookup"
         payload = {
             "phone": phone,
-            "litigatorFilter": False  # flip to True if you want litigator scrubbing back on
+            "litigatorFilter": False
         }
         r = requests.post(url, headers=headers, json=payload, timeout=30)
         if r.status_code == 200:
@@ -81,7 +79,6 @@ def process_job(job_id, filepath):
         results = {}
         processed_count = 0
 
-        # 20 concurrent workers -- tune this down if you start seeing rate-limit errors (HTTP 429)
         with ThreadPoolExecutor(max_workers=20) as executor:
             futures = {executor.submit(lookup_number, p): p for p in unique_numbers}
             for future in as_completed(futures):
@@ -156,8 +153,6 @@ def index():
             flash("Please upload a CSV file")
             return redirect(url_for("index"))
 
-        # Save the upload to disk immediately -- the request ends right after this,
-        # so we can't keep it in memory for the background thread to use later.
         upload_temp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
         file.save(upload_temp.name)
         upload_temp.close()
@@ -214,7 +209,6 @@ def status(job_id):
         flash(f"Error: {job.get('error', 'Unknown error')}")
         return redirect(url_for("index"))
 
-    # done
     return render_template(
         "result.html",
         total=job["total"],
